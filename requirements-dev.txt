@@ -1,0 +1,3 @@
+# 개발/테스트용 의존성 (런타임에는 불필요)
+# 샘플 작업지시서 PDF 생성기(sample_data/make_sample_work_order.py)에 사용
+weasyprint>=69.0
