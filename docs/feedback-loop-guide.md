@@ -10,9 +10,11 @@
 - 추출 결과가 틀렸을 때 어느 파일을 고쳐야 하나?
 - 사용자의 피드백을 어떻게 코드와 테스트로 남기나?
 - 언제 분석기를 새로 만들고, 언제 Excel 변환기만 추가하나?
+- GitHub Copilot CLI를 사용하면 어떤 작업을 맡길 수 있나?
 
 처음에는 모든 내용을 외울 필요가 없습니다. **1~4절로 전체 구조를 이해한 뒤**, 실제 결과가 틀렸을 때
-7절의 네 가지 질문을 따라가면 됩니다.
+7절의 네 가지 질문을 따라가면 됩니다. GitHub Copilot CLI를 사용한다면 4절 다음의 Copilot 사용법도
+함께 읽어보세요.
 
 ## 한 줄로 먼저 이해하기
 
@@ -140,6 +142,151 @@ python -m src.extract_techpack TechPack.pdf
    ↓
 사용자 확인
 ```
+
+## GitHub Copilot CLI를 사용하면 더 간단해지는 부분
+
+GitHub Copilot CLI를 사용하면 파일을 일일이 찾고, 수정 위치를 추측하고, 테스트와 PR 명령을 직접
+반복하는 작업을 줄일 수 있습니다. 이 문서에서는 GitHub Copilot CLI를 간단히 **Copilot**이라고
+부릅니다.
+
+가장 간단한 사용 방법은 세 단계입니다.
+
+1. 원본 문서, 목표 Excel, 현재 결과와 원하는 차이를 알려줍니다.
+2. 문제 단계 확인 → 한 계층 수정 → 회귀 테스트 추가 → 테스트 실행을 요청합니다.
+3. 결과 Excel과 `/diff`를 확인한 뒤 PR을 만듭니다.
+
+### Copilot이 맡을 수 있는 작업
+
+| 직접 작업할 때 | Copilot을 사용할 때 |
+| --- | --- |
+| 관련 Python 파일을 직접 찾음 | 저장소를 검색해 관련 스키마·변환·테스트 파일을 찾음 |
+| JSON과 Excel을 보며 수정 위치를 추측 | RAW JSON → 정제 JSON → Excel 순서로 문제 단계를 구분 |
+| 코드를 직접 수정 | 스키마 또는 출력 변환 코드 중 필요한 부분을 수정 |
+| 테스트 사례를 직접 작성 | 사용자 피드백을 재현하는 회귀 테스트를 추가 |
+| 테스트 명령을 직접 실행하고 오류를 추적 | 테스트를 실행하고 실패 원인을 찾아 수정 |
+| 변경 파일을 하나씩 확인 | `/diff`와 `/review`로 변경 내용을 확인 |
+| 브랜치·커밋·PR 작업을 직접 수행 | `/pr`을 사용하거나 `/delegate --base main`으로 PR 작업 위임 |
+
+Copilot을 사용하면 다음 반복 과정이 하나의 대화로 이어집니다.
+
+```text
+원본 PDF와 목표 Excel 경로 전달
+   ↓
+Copilot이 현재 코드와 결과 파일 조사
+   ↓
+추출 문제인지 Excel 변환 문제인지 구분
+   ↓
+코드 수정 + 회귀 테스트 추가
+   ↓
+테스트 실행 + 변경 내용 설명
+   ↓
+사용자 확인 후 PR 생성
+```
+
+### 그래도 사용자가 직접 결정해야 하는 것
+
+Copilot이 업무 규칙 자체를 임의로 정하면 안 됩니다. 다음 내용은 사용자가 알려줘야 합니다.
+
+- 어떤 Excel이 올바른 최종 결과인지
+- 현재 값과 원하는 값이 정확히 무엇인지
+- 피드백이 모든 문서에 적용되는 일반 규칙인지 특정 문서만의 예외인지
+- 원본 문서에 없는 값을 기본값으로 채울지, 계산할지, 비워둘지
+- 최종 결과를 업무에서 사용해도 되는지
+
+즉 Copilot은 **개발 작업을 빠르게 수행하는 도구**이고, 사용자는 **업무 정답을 알려주는 사람**입니다.
+
+<details>
+<summary>복사해서 쓰는 프롬프트와 Copilot CLI 명령 보기</summary>
+
+### 파일을 Copilot에 알려주는 방법
+
+Copilot CLI에서는 `@`로 저장소 파일을 대화에 포함할 수 있습니다.
+
+```text
+@docs/feedback-loop-guide.md
+@src/schema.py
+@src/extract_work_order.py
+@src/extract_techpack.py
+@tests/test_processing.py
+```
+
+원본 PDF나 목표 Excel이 저장소 밖에 있다면 먼저 `/add-dir`로 해당 폴더의 접근을 허용한 뒤 파일 경로를
+알려줍니다. 실제 고객 문서는 저장소에 복사하거나 커밋하지 않습니다. 민감한 파일을 Copilot에 제공하기
+전에는 조직의 데이터 보호 정책을 확인하고, 필요하면 익명화된 샘플을 사용합니다.
+
+### 처음 요청할 때 사용할 프롬프트
+
+다음 형식을 복사해 실제 경로와 요구사항만 바꿔 사용할 수 있습니다.
+
+```text
+@docs/feedback-loop-guide.md를 기준으로 작업해줘.
+
+원본 문서: /경로/작업지시서.pdf
+목표 Excel: /경로/원하는결과.xlsx
+현재 결과: output/현재결과.json 또는 output/현재결과.xlsx
+
+먼저 다음을 확인해줘.
+1. 기존 작업지시서 분석기를 재사용할 수 있는 형식인지
+2. 문제가 스키마 추출인지 JSON 후처리인지 Excel 변환인지
+3. 목표 Excel에서 일반화해야 할 행·컬럼 규칙이 무엇인지
+
+그다음 한 계층만 수정하고, 피드백을 재현하는 테스트를 추가해줘.
+실제 고객 데이터나 특정 행 번호를 하드코딩하지 말고 기존 테스트도 실행해줘.
+마지막에는 변경 파일과 결과를 간단히 설명해줘.
+```
+
+작업 범위가 크다면 먼저 `/plan`을 실행해 계획을 검토한 뒤 구현을 시작할 수 있습니다. 요구사항과 정답이
+명확하다면 `/autopilot`을 사용해 조사, 수정, 테스트 과정을 계속 진행하도록 맡길 수도 있습니다.
+
+### 다음 피드백을 줄 때 사용할 프롬프트
+
+첫 요청 이후에는 전체 설명을 반복하지 않고, 변경된 기대값만 구체적으로 알려주면 됩니다.
+
+```text
+사용자 피드백:
+- 입력 문서/페이지: TechPack.pdf 3페이지
+- 현재 결과: Item Price가 "$3.200 yd SP24"
+- 원하는 결과: "$3.200 yd"
+- 일반 규칙: 모든 가격에서 SP24와 LIST 태그 제거
+- 예외: 없음
+
+먼저 RAW JSON과 정제 JSON 중 어디까지 값이 올바른지 확인해줘.
+필요한 계층만 수정하고 이 규칙의 회귀 테스트를 추가한 뒤 테스트를 실행해줘.
+```
+
+이렇게 피드백을 주면 Copilot이 이전 코드와 테스트를 읽고, 새 규칙이 기존 동작을 깨뜨리는지도 함께
+확인할 수 있습니다.
+
+### 변경 내용과 PR 확인
+
+수정이 끝나면 다음 기능을 사용할 수 있습니다.
+
+| 기능 | 사용 시점 |
+| --- | --- |
+| `/diff` | Copilot이 바꾼 파일과 변경 내용을 확인 |
+| `/review` | 변경 코드에서 오류 가능성을 한 번 더 검토 |
+| `!python -m unittest discover -s tests -v` | 테스트를 직접 다시 실행 |
+| `/pr` | 현재 브랜치의 PR 확인과 작업 |
+| `/delegate --base main` | 작업을 GitHub에 위임해 `main` 대상 PR 생성 |
+
+자동 생성된 결과라도 목표 Excel과 일치하는지는 사용자가 마지막으로 확인해야 합니다.
+
+### 반복 규칙을 저장소에 알려주기
+
+매번 같은 원칙을 프롬프트에 적고 싶지 않다면 `.github/copilot-instructions.md`에 저장소 규칙을 적을 수
+있습니다. Copilot CLI는 이 파일의 지침을 읽고 이후 작업에 반영합니다.
+
+예를 들면 다음 규칙을 기록할 수 있습니다.
+
+```markdown
+- 실제 고객 PDF와 Excel을 저장소에 커밋하지 않는다.
+- 같은 업무 의미를 가진 문서 형식은 기존 분석기를 먼저 재사용한다.
+- 정제 JSON이 맞으면 스키마를 수정하지 않고 출력 변환기를 수정한다.
+- 사용자 피드백 한 건마다 회귀 테스트 한 개를 추가한다.
+- 변경 후 `python -m unittest discover -s tests -v`를 실행한다.
+```
+
+</details>
 
 ## 5. 시작 전에 준비할 자료
 
@@ -334,3 +481,4 @@ python -m unittest discover -s tests -v
 
 - [Content Understanding custom analyzer 만들고 개선하기](https://learn.microsoft.com/azure/ai-services/content-understanding/how-to/customize-analyzer-content-understanding-studio)
 - [Content Understanding으로 분류하고 분석기에 라우팅하기](https://learn.microsoft.com/azure/ai-services/content-understanding/how-to/classification-content-understanding-studio)
+- [GitHub Copilot CLI 사용하기](https://docs.github.com/copilot/how-tos/use-copilot-agents/use-copilot-cli)
